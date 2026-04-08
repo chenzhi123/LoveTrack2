@@ -1,0 +1,10 @@
+{
+  "name": "LoveTrack 足迹地图",
+  "short_name": "LoveTrack",
+  "description": "情侣/朋友/家人共享足迹地图与打卡记录",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#0f172a",
+  "lang": "zh-CN"
+}
