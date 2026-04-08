@@ -1,27 +1,37 @@
 import { nanoid } from "nanoid";
-import { hasDatabaseUrl, initRecordsDb } from "@/lib/records-db";
+import { auth } from "@/auth";
+import { hasDatabaseUrl, initSql } from "@/lib/database";
 import type { StoredRecord } from "@/types/records";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_BYTES = 4 * 1024 * 1024; // 4MB base64 上限（演示环境）
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
 export async function GET(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const sort = searchParams.get("sort") === "asc" ? "asc" : "desc";
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
 
   if (!hasDatabaseUrl()) {
-    return Response.json({
-      ok: true,
-      source: "unconfigured" as const,
-      hint: "请在 Vercel 控制台为项目添加 Neon Postgres，并设置 DATABASE_URL（或 POSTGRES_URL）环境变量后重新部署。",
-      records: [] as StoredRecord[],
-    });
+    return Response.json(
+      {
+        ok: false,
+        error: "database_unconfigured",
+        message: "请配置 DATABASE_URL 后使用云端记录。",
+        records: [] as StoredRecord[],
+      },
+      { status: 503 },
+    );
   }
 
   try {
-    const sql = await initRecordsDb();
+    const sql = await initSql();
     if (!sql) {
       return Response.json(
         { ok: false, error: "database_unavailable" },
@@ -33,11 +43,13 @@ export async function GET(req: Request) {
         ? await sql`
             SELECT id, created_at, text_content, file_name, mime_type, file_size, file_data
             FROM app_records
+            WHERE user_id = ${userId}
             ORDER BY created_at ASC
           `
         : await sql`
             SELECT id, created_at, text_content, file_name, mime_type, file_size, file_data
             FROM app_records
+            WHERE user_id = ${userId}
             ORDER BY created_at DESC
           `;
     let list = rows as StoredRecord[];
@@ -58,13 +70,18 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   if (!hasDatabaseUrl()) {
     return Response.json(
       {
         ok: false,
         error: "database_unconfigured",
-        useLocal: true,
-        message: "服务端数据库未配置，请使用页面内的本机存储模式。",
+        message: "请配置 DATABASE_URL。",
       },
       { status: 503 },
     );
@@ -117,7 +134,7 @@ export async function POST(req: Request) {
   }
 
   const id = nanoid();
-  const sql = await initRecordsDb();
+  const sql = await initSql();
   if (!sql) {
     return Response.json(
       { ok: false, error: "database_unavailable" },
@@ -127,19 +144,20 @@ export async function POST(req: Request) {
 
   try {
     await sql`
-      INSERT INTO app_records (id, text_content, file_name, mime_type, file_size, file_data)
+      INSERT INTO app_records (id, text_content, file_name, mime_type, file_size, file_data, user_id)
       VALUES (
         ${id},
         ${text},
         ${fileName},
         ${mimeType},
         ${fileSize},
-        ${fileBase64}
+        ${fileBase64},
+        ${userId}
       )
     `;
     const [row] = await sql`
       SELECT id, created_at, text_content, file_name, mime_type, file_size, file_data
-      FROM app_records WHERE id = ${id}
+      FROM app_records WHERE id = ${id} AND user_id = ${userId}
     `;
     return Response.json({ ok: true, record: row as StoredRecord });
   } catch {
@@ -148,6 +166,12 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   if (!hasDatabaseUrl()) {
     return Response.json({ ok: false, error: "database_unconfigured" }, { status: 503 });
   }
@@ -156,12 +180,12 @@ export async function DELETE(req: Request) {
   if (!id) {
     return Response.json({ ok: false, error: "missing_id" }, { status: 400 });
   }
-  const sql = await initRecordsDb();
+  const sql = await initSql();
   if (!sql) {
     return Response.json({ ok: false, error: "database_unavailable" }, { status: 503 });
   }
   try {
-    await sql`DELETE FROM app_records WHERE id = ${id}`;
+    await sql`DELETE FROM app_records WHERE id = ${id} AND user_id = ${userId}`;
     return Response.json({ ok: true });
   } catch {
     return Response.json({ ok: false, error: "delete_failed" }, { status: 500 });

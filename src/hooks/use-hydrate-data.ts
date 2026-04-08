@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import {
   db,
@@ -8,6 +9,7 @@ import {
   pushCloudMirror,
   setSetting,
 } from "@/lib/db";
+import { hydrateFootprintFromServer, pushFootprintSnapshot } from "@/lib/footprint-sync";
 import { useAppStore } from "@/store/use-app-store";
 import type { CheckIn, Space, SpaceMember } from "@/types/models";
 
@@ -26,6 +28,7 @@ async function loadAll(preferredSpaceId: string | null) {
 }
 
 export function useHydrateData() {
+  const { status } = useSession();
   const {
     setHydrated,
     setSpaces,
@@ -36,9 +39,15 @@ export function useHydrateData() {
   } = useAppStore();
 
   useEffect(() => {
+    if (status !== "authenticated") return;
     let cancelled = false;
     (async () => {
-      await ensureSeedData();
+      try {
+        await hydrateFootprintFromServer();
+      } catch {
+        await ensureSeedData();
+      }
+      if (cancelled) return;
       const tutorialDone = await getSetting("tutorialCompleted", false);
       const savedSid = await getSetting<string | null>("activeSpaceId", null);
       const { spaces, sid, checkIns } = await loadAll(savedSid);
@@ -64,6 +73,7 @@ export function useHydrateData() {
       cancelled = true;
     };
   }, [
+    status,
     setActiveSpaceId,
     setCheckIns,
     setHydrated,
@@ -94,6 +104,7 @@ export async function afterMutation(spaceId: string) {
     await db.spaces.update(spaceId, { updatedAt: Date.now() });
   }
   await pushCloudMirror();
+  await pushFootprintSnapshot().catch(() => {});
   await refreshSpaceData(spaceId);
 }
 

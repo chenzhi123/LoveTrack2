@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "lovetrack_consent_v1";
@@ -35,19 +36,27 @@ async function requestDirectoryAccess(): Promise<boolean> {
 }
 
 export function FirstVisitConsent() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      if (localStorage.getItem(STORAGE_KEY) === "1") return;
-      setOpen(true);
-    } catch {
-      setOpen(true);
-    }
-  }, []);
+    if (pathname === "/login" || pathname === "/register") return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled || typeof window === "undefined") return;
+      try {
+        if (localStorage.getItem(STORAGE_KEY) === "1") return;
+        setOpen(true);
+      } catch {
+        setOpen(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   const finish = () => {
     try {

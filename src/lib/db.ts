@@ -125,3 +125,33 @@ export async function pullCloudMirror(): Promise<boolean> {
     return false;
   }
 }
+
+/** 用服务端快照覆盖本地 IndexedDB（登录后拉取） */
+export async function replaceDexieFromSnapshot(data: {
+  spaces: Space[];
+  members: SpaceMember[];
+  checkIns: CheckIn[];
+}): Promise<void> {
+  await db.transaction("rw", db.spaces, db.checkIns, db.members, async () => {
+    await db.checkIns.clear();
+    await db.members.clear();
+    await db.spaces.clear();
+    if (data.spaces.length) await db.spaces.bulkAdd(data.spaces);
+    if (data.members.length) await db.members.bulkAdd(data.members);
+    if (data.checkIns.length) await db.checkIns.bulkAdd(data.checkIns);
+  });
+}
+
+export async function exportSnapshotFromDexie(): Promise<{
+  version: 1;
+  spaces: Space[];
+  members: SpaceMember[];
+  checkIns: CheckIn[];
+}> {
+  const [spaces, checkIns, members] = await Promise.all([
+    db.spaces.toArray(),
+    db.checkIns.toArray(),
+    db.members.toArray(),
+  ]);
+  return { version: 1, spaces, members, checkIns };
+}

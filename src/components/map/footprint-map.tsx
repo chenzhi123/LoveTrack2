@@ -24,7 +24,7 @@ type ClusterFeature = GeoJSON.Feature<GeoJSON.Point> & {
   };
 };
 
-function pinColor(space: Space | undefined, checkIn: CheckIn): string {
+function pinColor(space: Space | undefined): string {
   return space ? relationshipAccent(space.relationshipMode) : "#6366f1";
 }
 
@@ -165,7 +165,7 @@ export function FootprintMap({ space }: { space: Space | undefined }) {
           }
           if (!checkIn) return null;
           const active = checkIn.id === selectedCheckInId;
-          const color = pinColor(space, checkIn);
+          const color = pinColor(space);
           return (
             <Marker key={checkIn.id} longitude={lng} latitude={lat} anchor="bottom">
               <button

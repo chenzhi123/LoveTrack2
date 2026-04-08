@@ -3,64 +3,58 @@
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LocalRecord } from "@/lib/records-local-db";
-import {
-  addLocalRecord,
-  deleteLocalRecord,
-  listLocalRecords,
-} from "@/lib/records-local-db";
 import type { StoredRecord } from "@/types/records";
-
-type Row = StoredRecord | LocalRecord;
 
 export function RecordsApp() {
   const [sort, setSort] = useState<"desc" | "asc">("desc");
   const [q, setQ] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
-  const [source, setSource] = useState<"postgres" | "local" | "unconfigured">(
-    "postgres",
-  );
+  const [rows, setRows] = useState<StoredRecord[]>([]);
   const [hint, setHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  const loadLocal = useCallback(async () => {
-    const list = await listLocalRecords(sort, q);
-    setRows(list);
-    setSource("local");
-    setLoading(false);
-  }, [sort, q]);
+  const [cloudOk, setCloudOk] = useState(true);
 
   const loadRemote = useCallback(async () => {
     const params = new URLSearchParams({ sort, q });
     const res = await fetch(`/api/records?${params.toString()}`, {
       cache: "no-store",
+      credentials: "same-origin",
     });
     const data = (await res.json()) as {
       ok: boolean;
       source?: string;
-      hint?: string;
+      message?: string;
       records?: StoredRecord[];
+      error?: string;
     };
-    if (data.source === "unconfigured") {
-      setHint(data.hint ?? null);
-      await loadLocal();
-      setSource("unconfigured");
+
+    if (res.status === 401) {
+      setCloudOk(false);
+      setHint("登录已失效，请重新登录。");
+      setRows([]);
+      setLoading(false);
       return;
     }
-    if (!data.ok || !data.records) {
-      setToast("云端不可用，已切换本机存储。");
-      await loadLocal();
+
+    if (res.status === 503 || !data.ok) {
+      setCloudOk(false);
+      setHint(
+        data.message ??
+          "服务端数据库未配置或不可用。请在 Vercel 为项目添加 Neon 并设置 DATABASE_URL、AUTH_SECRET 后重新部署。",
+      );
+      setRows(data.records ?? []);
+      setLoading(false);
       return;
     }
+
+    setCloudOk(true);
     setHint(null);
-    setSource("postgres");
-    setRows(data.records);
+    setRows(data.records ?? []);
     setLoading(false);
-  }, [sort, q, loadLocal]);
+  }, [sort, q]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,12 +69,12 @@ export function RecordsApp() {
   }, [loadRemote]);
 
   useEffect(() => {
-    if (source !== "postgres") return;
+    if (!cloudOk) return;
     const t = window.setInterval(() => {
       void loadRemote();
     }, 2800);
     return () => window.clearInterval(t);
-  }, [source, loadRemote]);
+  }, [cloudOk, loadRemote]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -89,60 +83,43 @@ export function RecordsApp() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!cloudOk) {
+      showToast("当前无法写入云端，请先完成数据库配置。");
+      return;
+    }
     setSubmitting(true);
     try {
-      if (source === "postgres") {
-        const fd = new FormData();
-        fd.set("text", text);
-        if (file) fd.set("file", file);
-        const res = await fetch("/api/records", { method: "POST", body: fd });
-        const data = (await res.json()) as { ok?: boolean; useLocal?: boolean };
-        if (!res.ok && data.useLocal) {
-          await addLocalRecord({ text, file });
-          setSource("local");
-          setHint(
-            "服务端数据库未配置或不可用，本条已写入本机 IndexedDB，仅当前浏览器可见。",
-          );
-          showToast("已保存到本机");
-          setText("");
-          setFile(null);
-          await loadLocal();
-          return;
-        }
-        if (!res.ok) {
-          showToast("保存失败，请稍后重试");
-          return;
-        }
-        showToast("已同步到云端");
-        setText("");
-        setFile(null);
-        await loadRemote();
+      const fd = new FormData();
+      fd.set("text", text);
+      if (file) fd.set("file", file);
+      const res = await fetch("/api/records", {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        showToast("保存失败，请稍后重试");
         return;
       }
-      await addLocalRecord({ text, file });
-      showToast("已保存到本机");
+      showToast("已保存到云端");
       setText("");
       setFile(null);
-      await loadLocal();
+      await loadRemote();
     } finally {
       setSubmitting(false);
     }
   };
 
   const onDelete = async (id: string) => {
-    if (source === "postgres") {
-      const res = await fetch(`/api/records?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        showToast("删除失败");
-        return;
-      }
-      await loadRemote();
+    const res = await fetch(`/api/records?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      showToast("删除失败");
       return;
     }
-    await deleteLocalRecord(id);
-    await loadLocal();
+    await loadRemote();
   };
 
   const exportCsv = () => {
@@ -201,19 +178,14 @@ export function RecordsApp() {
           />
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !cloudOk}
             className="w-full rounded-2xl bg-zinc-900 py-3 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
           >
-            {submitting ? "提交中…" : "保存记录"}
+            {submitting ? "提交中…" : "保存到云端"}
           </button>
         </form>
         <p className="mt-2 text-xs text-zinc-500">
-          当前模式：
-          {source === "postgres"
-            ? "云端实时同步（多设备共享）"
-            : source === "unconfigured"
-              ? "本机存储（数据库未配置）"
-              : "本机存储"}
+          数据与当前登录账号绑定，存储在服务器数据库中。
         </p>
       </section>
 
@@ -304,7 +276,7 @@ export function RecordsApp() {
   );
 }
 
-function FileCell({ row }: { row: Row }) {
+function FileCell({ row }: { row: StoredRecord }) {
   if (!row.file_name && !row.file_data) {
     return <span className="text-xs text-zinc-400">—</span>;
   }

@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Suspense, useCallback, useState } from "react";
 import { useHydrateData } from "@/hooks/use-hydrate-data";
 import { pullCloudMirror, pushCloudMirror } from "@/lib/db";
+import { pushFootprintSnapshot } from "@/lib/footprint-sync";
 import { useAppStore } from "@/store/use-app-store";
 import type { DateFilter } from "@/store/use-app-store";
 import { AddCheckInDrawer } from "@/components/checkin/add-checkin-drawer";
@@ -39,6 +41,7 @@ const DATE_OPTIONS: { id: DateFilter; label: string }[] = [
 
 export function AppShell() {
   useHydrateData();
+  const { status } = useSession();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const {
     hydrated,
@@ -74,7 +77,8 @@ export function AppShell() {
 
   const handleSync = async () => {
     await pushCloudMirror();
-    setSyncMessage("已同步到本浏览器云镜像");
+    await pushFootprintSnapshot().catch(() => {});
+    setSyncMessage("已同步到本浏览器镜像，并已尝试上传足迹到账号云端");
     window.setTimeout(() => setSyncMessage(null), 3200);
   };
 
@@ -85,11 +89,11 @@ export function AppShell() {
     window.location.reload();
   };
 
-  if (!hydrated) {
+  if (status === "loading" || !hydrated) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-zinc-500">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100" />
-        <p className="text-sm">正在加载本地足迹库…</p>
+        <p className="text-sm">正在加载会话与足迹数据…</p>
       </div>
     );
   }
