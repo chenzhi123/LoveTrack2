@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LoveTrack · 足迹地图
 
-## Getting Started
+情侣 / 朋友 / 家人共享足迹与记录。**线上地址（推荐直接使用）：** [https://lovetrack2.vercel.app](https://lovetrack2.vercel.app)
 
-First, run the development server:
+---
+
+## 功能简介
+
+- **关系空间**：情侣、朋友、家人三种模式，各自独立地图与配色。  
+- **打卡足迹**：地图 + 列表联动；支持地址搜索、经纬度选点、扫码；图钉光晕与缩放聚合。  
+- **数据记录**：文字与附件（图片/文件），支持筛选、排序、导出 CSV；数据与**登录账号**绑定，存在服务器数据库。  
+- **账号**：邮箱注册 / 登录；换设备用同一账号即可同步云端数据。  
+- **足迹云端快照**：登录后足迹会同步到账号（编辑后自动上传，也可使用页内「云同步」）。  
+- **主题与多端**：深/浅色主题，响应式布局，手机浏览器即可使用。
+
+---
+
+## 别人怎么用（访客说明）
+
+1. 打开 **https://lovetrack2.vercel.app**  
+2. 首次使用请先 **注册**（右上角入口或跳转后的注册页），使用**常用邮箱**和**至少 8 位密码**。  
+3. **登录**后：  
+   - **足迹地图**：切换空间、时间筛选、地图/列表、右下角「+」添加打卡。  
+   - **数据记录**：顶部导航进入，可新建记录、筛选排序、导出 CSV。  
+4. **退出**：右上角 **退出**。
+
+> 仅需浏览器，**无需**安装 App 或配置开发环境。
+
+---
+
+## 开发与部署（贡献者）
+
+**技术栈：** Next.js 16 · React 19 · TypeScript · Tailwind · MapLibre · Dexie · NextAuth · Neon (Postgres)
+
+```bash
+git clone https://github.com/chenzhi123/LoveTrack2.git
+cd LoveTrack2
+npm install
+```
+
+本地环境变量参考仓库根目录 **`.env.example`**。使用 Vercel 时可在项目目录执行：
+
+```bash
+vercel env pull .env.local
+```
+
+启动开发服务：
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**GitHub ↔ Vercel：** 本仓库已与 Vercel 项目关联；向 **`main`** 分支 **push** 后会触发自动构建与生产部署（以 Vercel 控制台显示为准）。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 许可证
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+按仓库所有者约定使用；欢迎 Issue / PR 改进体验。
